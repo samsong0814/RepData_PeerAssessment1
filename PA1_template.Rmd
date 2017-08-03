@@ -1,25 +1,161 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research Course Project 1"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
 ---
+#Loading and preprocessing the data
+
+The first step is to load the data file ¡°activity.csv¡± by read.csv
+
+```{r}
+setwd("C:/Users/songweishan/Desktop/R")
+cls = c("integer", "character", "integer")
+df <- read.csv("activity.csv", head=TRUE, colClasses=cls, na.strings="NA")
+head(df)
+```
+
+The second step is to process/transform the data into a format suitable for later analysis, 
+so we get rid of rows containing missing values and correct the type of date column.
 
 
-## Loading and preprocessing the data
+```{r}
+df$date <- as.Date(df$date)
+df_ign <- subset(df, !is.na(df$steps))
+```
+
+#What is mean total number of steps taken per day?
+
+In the next step, a histogram of the daily total number of steps taken is generated, showing the distribution of these totals.
+```{r}
+dailysum <- tapply(df_ign$steps, df_ign$date, sum, na.rm=TRUE, simplify=T)
+dailysum <- dailysum[!is.na(dailysum)]
+
+hist(x=dailysum,
+     col="blue",
+     breaks=20,
+     xlab="Daily total steps",
+     ylab="Frequency",
+     main="The Distribution of Daily Total")
+```
+
+Then we calculate the mean and median total number of steps taken per day
+
+```{r}
+mean(dailysum)
+```
+
+```{r}
+median(dailysum)
+```
+Now we get the mean of 10766 steps and the median of 10765 steps
+
+#What is the average daily activity pattern?
+
+Here we create a time series plot (i.e. type = ¡°l¡±) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+int_avg <- tapply(df_ign$steps, df_ign$interval, mean, na.rm=TRUE, simplify=T)
+df_ia <- data.frame(interval=as.integer(names(int_avg)), avg=int_avg)
+
+with(df_ia,
+     plot(interval,
+          avg,
+          type="l",
+          xlab="5-minute intervals",
+          ylab="average steps in the interval across all days"))
+```
+
+Thus we can tell that the 835th 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps
+
+```{r}
+max_steps <- max(df_ia$avg)
+df_ia[df_ia$avg == max_steps, ]
+```
+
+#Imputing missing values
+
+First, we calculate  the total number of missing values in the dataset  (i.e. the total number of rows with NAs)
+
+```{r}
+sum(is.na(df$steps))
+```
+We can tell that the data set has 2304 rows with missing data.
 
 
 
-## What is mean total number of steps taken per day?
+Second, we now use a simple strategy for filling in all of the missing values in the dataset: 
 
+If a 5-minute interval has missing value, we use the mean for that 5-minute interval.
 
+We create a new data frame df_impute that is equal to the original dataset with the missing data filled in:
 
-## What is the average daily activity pattern?
+```{r}
+df_impute <- df
+ndx <- is.na(df_impute$steps)
+int_avg <- tapply(df_ign$steps, df_ign$interval, mean, na.rm=TRUE, simplify=T)
+df_impute$steps[ndx] <- int_avg[as.character(df_impute$interval[ndx])]
+```
 
+Next, we make a histogram of the total number of steps taken per day and report the mean and median total number of steps taken per day.
 
+```{r}
+new_dailysum <- tapply(df_impute$steps, df_impute$date, sum, na.rm=TRUE, simplify=T)
 
-## Imputing missing values
+hist(x=new_dailysum,
+     col="red",
+     breaks=20,
+     xlab="daily steps",
+     ylab="frequency",
+     main="The distribution of daily total (with missing data imputed)")
+```
 
+```{r}
+mean(new_dailysum)
+```
 
+```{r}
+median(new_dailysum)
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+Based on the imputed data set, the new mean compared with the original mean 10766 and median 10765, the mean and the median has a small change. In fact, the new median becomes identical to the mean. One possible explanation is that when we fill the missing data for the intervals, we use means for intervals, so we have more data close or identical to the means, and median is shifted and becomes identical to the mean.
+
+The impact of imputing missing data on the estimates of the total daily number of steps is also clear: now we have higher frquency counts in the histogram at the center region (close to the mean).
+
+#Are there differences in activity patterns between weekdays and weekends?
+
+We are going to create a new factor variable in the dataset with two levels ¨C ¡°weekday¡± and ¡°weekend¡± indicating whether a given date is a weekday or weekend day.
+
+```{r}
+is_weekday <- function(d) {
+    wd <- weekdays(d)
+    ifelse (wd == "ÐÇÆÚÁù" | wd == "ÐÇÆÚÈÕ", "weekend", "weekday")
+}
+
+wx <- sapply(df_impute$date, is_weekday)
+df_impute$wk <- as.factor(wx)
+head(df_impute)
+summary(df_impute$wk)
+```
+
+Next, we make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+```{r}
+wk_df <- aggregate(steps ~ wk+interval, data=df_impute, FUN=mean)
+
+library(lattice)
+xyplot(steps ~ interval | factor(wk),
+       layout = c(1, 2),
+       xlab="Interval",
+       ylab="Number of steps",
+       type="l",
+       lty=1,
+       data=wk_df)
+```
+
+By visually inspecting the two charts£¬the weekday activities appears to be higher than the weekends:
+ 
+Weekday activities arise around 5~6am and weekend activities arise around 8am;
+
+We can also observe that from 10am to 5pm, the weekends have higher activity levels than the weekdays.
